@@ -1,0 +1,302 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from itertools import combinations
+from scipy.ndimage import convolve, generate_binary_structure
+import math as mt
+import seaborn as sns
+from numpy.linalg import norm 
+
+
+
+
+class XYSystem_2D():
+        def __init__(self, temperature=3, width=5, period = 0):
+            self.width = width
+            self.period = period
+            self.num_spins = self.width**2
+            self.spin_config = np.ones((self.width,self.width,2))
+           # self.aver = self.neighbors()
+            L , N = self.width, self.num_spins
+            self.liss = list(combinations(np.array([-1,1]),2))
+            self.spin_config[:,:,0] = np.random.choice(np.array([-1,1]),(self.width,self.width)) 
+            self.spin_config[:,:,1] = np.random.choice(np.array([-1,1]),(self.width,self.width)) 
+            self.temperature = temperature
+            self.Jsx = np.zeros((self.width,self.width))
+            self.Jsy = np.zeros((self.width,self.width))
+            #print(self.Jsx)
+            #print(self.Jsy)
+            self.energy = np.sum(self.get_energy_2())/self.num_spins
+            self.Mx = []
+            self.My = []
+            self.Cv = []
+            self.liss = list(combinations(np.array([-1,1]),2))
+            self.kappa = 1 
+        
+        def get_config(self):
+            return self.spin_config
+        
+        def kernel(sel,length):
+            if length%2==0:
+                print('failure')
+                return 
+            ker=np.ones((length,length))
+            central=np.array([int(length/2-1/2),int(length/2-1/2)])
+            for i in range(length):
+                for j in range(length):
+                    ker[i][j]=np.linalg.norm(np.array([i,j]) - central)
+            ker[int(length/2-1/2)][int(length/2-1/2)]=1
+            ker=1/ker
+            ker[int(length/2-1/2)][int(length/2-1/2)]=0
+            return ker
+
+        def get_energy(self):
+            kernel = generate_binary_structure(2, 1) ## We create the convolution kernel for the system,
+            kernel[1][1] = False ## we set the middle point equal to zero,
+            ## we add the different types of components,
+            energy_x = -self.Jsx*self.spin_config[:,:,0]*convolve(self.spin_config[:,:,0], kernel, mode='constant', cval=0)
+            energy_y = -self.Jsy*self.spin_config[:,:,1]*convolve(self.spin_config[:,:,1], kernel, mode='constant', cval=0)
+            arr_f = energy_x+energy_y
+            return arr_f.sum()/self.num_spins/2
+        
+        def get_energy_2(self):
+            kernel = generate_binary_structure(2,1)
+            kernel[1][1] = False
+            energy_x = -self.Jsx*self.spin_config[:,:,0]*convolve(self.spin_config[:,:,0], kernel, mode='constant', cval=0)
+            energy_y = -self.Jsy*self.spin_config[:,:,1]*convolve(self.spin_config[:,:,1], kernel, mode='constant', cval=0)
+            energy_xx = -self.spin_config[:,:,0]*convolve(self.spin_config[:,:,0], kernel, mode='constant', cval=0)
+            energy_yy = -self.spin_config[:,:,1]*convolve(self.spin_config[:,:,1], kernel, mode='constant', cval=0)
+            arr_f = energy_x+energy_y+energy_xx+energy_yy
+            return arr_f.sum()/self.num_spins/2
+        
+        def get_mag(self):
+            return np.array([np.sum(self.spin_config[:,:,0])/self.num_spins, np.sum(self.spin_config[:,:,1])/self.num_spins])   
+                  
+        def sweep(self):
+            beta = 1.0 / self.temperature
+            for x in range(self.width):
+                for y in range(self.width):
+                    self.tensor()
+                    spin_i=self.spin_config[x,y,:]
+                    spin_f=np.zeros(2)
+                    spin_f[0]=np.random.choice(np.array([-1,1]), 1)
+                    spin_f[1]=np.random.choice(np.array([-1,1]), 1)
+                    while (spin_f == spin_i).all():
+                        spin_f[0]=np.random.choice(np.array([-1,1]), 1)
+                        spin_f[1]=np.random.choice(np.array([-1,1]), 1)
+            # compute change in energy,
+                    E_i = 0
+                    E_f = 0
+                   # print(self.Jsx[x,y])
+                    if x>0:
+    
+                        E_i += - self.Jsx[x,y]*spin_i[0]*self.spin_config[x-1,y,0]
+                        E_i += - self.Jsy[x,y]*spin_i[1]*self.spin_config[x-1,y,1]
+                        E_i += - spin_i[0]*self.spin_config[x-1,y,0]
+                        E_i += - spin_i[1]*self.spin_config[x-1,y,1]
+            
+                        E_f += - self.Jsx[x,y]*spin_f[0]*self.spin_config[x-1,y,0]
+                        E_f += - self.Jsy[x,y]*spin_f[1]*self.spin_config[x-1,y,1]
+                        E_f += - spin_f[0]*self.spin_config[x-1,y,0]
+                        E_f += - spin_f[1]*self.spin_config[x-1,y,1]
+    
+                    if x<self.width-1:
+            
+                        E_i += - self.Jsx[x,y]*spin_i[0]*self.spin_config[x+1,y,0]
+                        E_i += - self.Jsy[x,y]*spin_i[1]*self.spin_config[x+1,y,1]
+                        E_i += - spin_i[0]*self.spin_config[x+1,y,0]
+                        E_i += - spin_i[1]*self.spin_config[x+1,y,1]
+
+    
+                        E_f += - self.Jsx[x,y]*spin_f[0]*self.spin_config[x+1,y,0]
+                        E_f += - self.Jsy[x,y]*spin_f[1]*self.spin_config[x+1,y,1]
+                        E_f += - spin_f[0]*self.spin_config[x+1,y,0]
+                        E_f += - spin_f[1]*self.spin_config[x+1,y,1]
+
+                    
+                    if y>0:
+                        
+                        E_i += - self.Jsx[x,y]*spin_i[0]*self.spin_config[x,y-1,0]
+                        E_i += - self.Jsy[x,y]*spin_i[1]*self.spin_config[x,y-1,1]
+                        E_i += - spin_i[0]*self.spin_config[x,y-1,0]
+                        E_i += - spin_i[1]*self.spin_config[x,y-1,1]
+    
+                        E_f += - self.Jsx[x,y]*spin_f[0]*self.spin_config[x,y-1,0]
+                        E_f += - self.Jsy[x,y]*spin_f[1]*self.spin_config[x,y-1,1]
+                        E_f += - spin_f[0]*self.spin_config[x,y-1,0]
+                        E_f += - spin_f[1]*self.spin_config[x,y-1,1]
+    
+                    if y<self.width-1: 
+    
+                        E_i += - self.Jsx[x,y]*spin_i[0]*self.spin_config[x,y+1,0]
+                        E_i += - self.Jsy[x,y]*spin_i[1]*self.spin_config[x,y+1,1]
+                        E_i += - spin_i[0]*self.spin_config[x,y+1,0]
+                        E_i += - spin_i[1]*self.spin_config[x,y+1,1]
+                
+                        E_f += - self.Jsx[x,y]*spin_f[0]*self.spin_config[x,y+1,0]
+                        E_f += - self.Jsy[x,y]*spin_f[1]*self.spin_config[x,y+1,1]
+                        E_f += - spin_f[0]*self.spin_config[x,y+1,0]
+                        E_f += - spin_f[1]*self.spin_config[x,y+1,1]
+                    
+                    dE = E_f-E_i
+                    if (dE>0)*(np.random.random() < np.exp(-beta*dE)):
+                        self.spin_config[x,y,:]=spin_f
+                    elif dE<=0:
+                        self.spin_config[x,y,:]=spin_f
+                        
+                    # if x==0:
+                    #     self.spin_config[-1,y,:]=spin_f
+                    # elif x== self.width-1:
+                    #     self.spin_config[0,y,:]=spin_f
+                    # elif y==0:
+                    #     self.spin_config[x,-1,:]=spin_f
+                    # elif y==self.width-1:
+                    #     self.spin_config[x,0,:]=spin_f
+
+    
+      
+        def evolution(self,max_nsweeps=int(5*1e3),temperature=None,H=None,show = False):
+            if temperature != None: 
+                self.temperature = temperature
+                
+            dic_thermal_t = {}
+            dic_thermal_t['energy']=[]
+            dic_thermal_t['mag_x']=[]
+            dic_thermal_t['mag_y']=[]
+            beta = 1.0/self.temperature
+            energy_temp = 0
+            
+            for k in list(range(max_nsweeps)):
+               self.sweep()
+               #print('#sweeps=%i'% (k+1))
+               energy = self.get_energy_2()
+               magnetiz_x = self.get_mag()[0]
+               dic_thermal_t['mag_x']+=[magnetiz_x]
+               magnetiz_y = self.get_mag()[1]
+               dic_thermal_t['mag_y']+=[magnetiz_y]
+               dic_thermal_t['energy'] += [energy]
+               if show  & (k%1e3 ==0):
+                   print('#sweeps=%i'% (k+1))
+                   print('energy=%.2f'%energy)
+                   print('energy=%.2f'%magnetiz_x)
+                   self.show()
+               if ((abs(energy-energy_temp)/abs(energy)<1e-4) & (k>500)) or k == max_nsweeps-1:
+                   print('\equilibrium state is reached at T=%.1f'%self.temperature)
+                   print('#sweep=%i'%k)
+                   print('energy=%.2f'%energy)
+                   print('energy=%.2f'%magnetiz_x)
+                   break
+               energy_temp = energy
+            nstates = len(dic_thermal_t['energy'])
+            energy = np.average(dic_thermal_t['energy'][int(nstates/2):])
+            self.energy = energy
+            energy2 = np.average(np.power(dic_thermal_t['energy'][int(nstates/2):],2))
+            self.Cv = (energy2-energy**2)*beta**2
+            magnetization_x = np.average(dic_thermal_t['mag_x'][int(nstates/2):])
+            self.Mx = magnetization_x
+            magnetization_y = np.average(dic_thermal_t['mag_y'][int(nstates/2):])
+            self.My = magnetization_y
+            
+        def annealing_2D(self,T_init=2.5,T_final=0.1,nsteps = 50,show_equi=False):
+            # initialize spins. Orientations are taken from 0 - 2pi randomly.,
+            #initialize spin configuration  ,
+            dic_thermal = {}
+            dic_thermal['temperature']=list(np.linspace(T_init,T_final,nsteps))
+            dic_thermal['energy']=[]
+            dic_thermal['Cv']=[]
+            dic_thermal['mag_x']=[]
+            dic_thermal['mag_y']=[]
+            for T in dic_thermal['temperature']:
+                self.evolution(temperature=T)
+                dic_thermal['energy'] += [self.energy]
+                dic_thermal['Cv'] += [self.Cv]
+                dic_thermal['mag_x'] += [self.Mx]
+                dic_thermal['mag_y'] += [self.My]
+            print(dic_thermal['mag_x'])
+            print(dic_thermal['mag_y'])
+            angles = self.mag_angle(dic_thermal['mag_x'], dic_thermal['mag_y'])
+            plt.plot(dic_thermal['temperature'],dic_thermal['Cv'],'.')
+            plt.ylabel(r'$C_v$')
+            plt.xlabel('T')
+            plt.show()
+            plt.plot(dic_thermal['temperature'],dic_thermal['energy'],'.')
+            plt.ylabel(r'energy')
+            plt.xlabel('T')
+            plt.show()
+            plt.plot(dic_thermal['temperature'],dic_thermal['mag_x'],'.', label='x-direction')
+            plt.plot(dic_thermal['temperature'],dic_thermal['mag_y'],'.', label='y-direction')
+            plt.ylabel('mag')
+            plt.xlabel('T')
+            plt.show()
+            plt.plot(dic_thermal['temperature'],angles,'.')
+            plt.ylabel(r'energy')
+            plt.xlabel('T')
+            plt.show()
+            return dic_thermal
+        
+                
+        def mag_neigh(self):
+            magn = np.zeros((self.width,self.width,2)) ## first slot x and second y 
+            ker = generate_binary_structure(2, 1) ## We create the convolution kernel for the system,
+            ker[1][1] = False ## we set the middle point equal to zero,
+            magn[:,:,0] = convolve(self.spin_config[:,:,0], ker, mode = 'constant', cval=0)
+            magn[:,:,1] = convolve(self.spin_config[:,:,1], ker, mode = 'constant', cval=0)
+            return magn/4
+            
+        def mag_angle(self, x, y):
+           # print(x)
+           # print(y)
+            r = np.zeros_like(x)
+            for i in range(len(x)):
+                r[i] = np.sqrt(x[i]**2+y[i]**2)
+            theta = np.zeros_like(x)
+            for i in range(len(x)):
+                if (r[i]!=0) and (y[i]>=0):
+                    theta[i] = np.arccos(x[i]/r[i])
+                elif r[i]!=0:
+                    theta[i] = -np.arccos(x[i]/r[i])
+                else: 
+                    theta[i] = -1
+            return theta
+        
+        def area_p(self, px, py):
+            arg = np.arctan2(py,px)
+            if px > py:
+                return 1 + norm(np.array([px,py]),2) * abs(np.cos(arg-np.pi/4))/mt.sqrt(3)
+            else:
+                return 1 - norm(np.array([px,py]),2) * abs(np.cos(arg-np.pi/4))/mt.sqrt(3)
+        
+        def get_local_str(self,x,y):
+            arg = np.arctan2(x,y)
+            ratio =  1 + np.sqrt(np.power(x,2)+np.power(y,2)) * abs(np.sin(2*arg-np.pi/4))/mt.sqrt(2)
+            db = -1 + np.sqrt(1+1/ratio)
+            da = -db/(1+db)
+            return da,db
+        
+        def tensor(self):
+            neigh = self.mag_neigh()
+            arg = np.arctan2(neigh[:,:,1] , neigh[:,:,0])
+            ratio = 1 - np.sqrt(np.power(neigh[:,:,0],2)+np.power(neigh[:,:,1],2)) * np.cos(2*arg-np.pi/4)/4
+            self.dx = (np.sqrt(ratio)-1)*np.sign(ratio-1)
+            self.dy = (1-np.sqrt(1/ratio))*np.sign(ratio-1)
+            self.Jsx = (np.sqrt(ratio)-1)*np.sign(ratio-1) 
+            self.Jsy = (np.sqrt(1/ratio)-1)*np.sign(ratio-1) 
+            
+            
+            #print(np.round(ratio,2))
+            #print(np.round(self.dx-self.dy,2))
+            #print(np.round(self.dy,2))
+            #print(np.round(self.Jsx,5))
+           # print("I think something is fishy")
+            #print(np.round(self.Jsy,5))
+          #  fig1 = sns.heatmap(self.Jsx, annot=False)
+          #  fig2 = sns.heatmap(self.Jsy, annot=False)
+          #  fig1.figure.savefig('Graphs/graph'+str(self.Jsx[10,5])+'.png')
+          #  plt.clf()
+
+
+     
+     
+     xy_system_test = XYSystem_2D(width=11)
+     cool_dat=xy_system_test.annealing_2D(T_init=6,T_final=0.1,nsteps = 100,show_equi=True)
+            
